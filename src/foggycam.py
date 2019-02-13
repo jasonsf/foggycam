@@ -346,8 +346,7 @@ class FoggyCam(object):
                 time_now = now_local.strftime('%Y-%m-%d %H:%M:%S')
                 input_image_path = camera_path + '/' + file_id + '.jpg'
                 tmpfile = camera_path + '/_' + file_id + '.jpg'
-                print ('image: ', image_file)
-                print ('timestamp: ', time_now)
+
                 os.rename(input_image_path, tmpfile)
                 photo = Image.open(tmpfile)
  
@@ -356,6 +355,7 @@ class FoggyCam(object):
                 day_color = (3, 8, 12)
                 night_color = (236, 236, 236)
                 color = day_color
+                a = Astral()
                 city = a['Phoenix']
                 now = datetime.now(pytz.utc)
                 sun = city.sun(date=now, local=True)
