@@ -16,6 +16,12 @@ from datetime import datetime
 import subprocess
 from azurestorageprovider import AzureStorageProvider
 import shutil
+from astral import Astral
+import pytz
+from pytz import timezone
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
 
 class FoggyCam(object):
     """FoggyCam client class that performs capture operations."""
@@ -60,8 +66,6 @@ class FoggyCam(object):
         self.local_path = os.path.dirname(os.path.abspath(__file__))
         self.temp_dir_path = os.path.join(self.local_path, '_temp')
 
-
-    def start(self):
         # It's important to try and load the cookies first to check
         # if we can avoid logging in.
         try:
@@ -110,7 +114,7 @@ class FoggyCam(object):
             request.add_header('Authorization', 'Basic %s' % self.nest_access_token)
 
             response = self.merlin.open(request)
-            session_data = response.read()
+            session_data = response.read().decode('utf-8')
 
             session_json = json.loads(session_data)
 
@@ -121,7 +125,6 @@ class FoggyCam(object):
             self.pickle_cookies()
         except urllib.request.HTTPError as err:
             print (err)
-
 
     def initialize_session(self):
         """Creates the first session to get the access token and cookie."""
@@ -136,7 +139,7 @@ class FoggyCam(object):
 
         try:
             response = self.merlin.open(request)
-            session_data = response.read()
+            session_data = response.read().decode('utf-8')
             session_json = json.loads(session_data)
 
             self.nest_access_token = session_json['access_token']
@@ -177,7 +180,7 @@ class FoggyCam(object):
 
                     try:
                         response = self.merlin.open(request)
-                        pin_attempt = response.read()
+                        pin_attempt = response.read().decode('utf-8')
 
                         parsed_pin_attempt = json.loads(pin_attempt)
                         if parsed_pin_attempt["status"].lower() == "id_match_positive":
@@ -224,7 +227,7 @@ class FoggyCam(object):
         request.add_header('Content-Type', 'application/x-www-form-urlencoded')
 
         response = self.merlin.open(request)
-        session_data = response.read()
+        session_data = response.read().decode('utf-8')
 
         print (session_data)
 
@@ -247,7 +250,7 @@ class FoggyCam(object):
 
         response = self.merlin.open(request)
 
-        response_data = response.read()
+        response_data = response.read().decode('utf-8')
 
         print (response_data)
 
@@ -277,15 +280,18 @@ class FoggyCam(object):
         for camera in self.nest_camera_array:
             camera_path = ''
             video_path = ''
+            motion_path = ''
 
             # Determine whether the entries should be copied to a custom path
             # or not.
             if not config.path:
                 camera_path = os.path.join(self.local_path, 'capture', camera, 'images')
                 video_path = os.path.join(self.local_path, 'capture', camera, 'video')
+                motion_path = os.path.join(self.local_path, 'capture', camera, 'motion')
             else:
                 camera_path = os.path.join(config.path, 'capture', camera, 'images')
                 video_path = os.path.join(config.path, 'capture', camera, 'video')
+                motion_path = os.path.join(config.path, 'capture', camera, 'motion')
 
             # Provision the necessary folders for images and videos.
             if not os.path.exists(camera_path):
@@ -294,14 +300,17 @@ class FoggyCam(object):
             if not os.path.exists(video_path):
                 os.makedirs(video_path)
 
-            image_thread = threading.Thread(target=self.perform_capture, args=(config, camera, camera_path, video_path))
+            if not os.path.exists(motion_path):
+                os.makedirs(motion_path)
+
+            image_thread = threading.Thread(target=self.perform_capture, args=(config, camera, camera_path, video_path, motion_path))
             image_thread.daemon = True
             image_thread.start()
 
         while True:
-            time.sleep(1)
+            time.sleep(0.5)
 
-    def perform_capture(self, config=None, camera=None, camera_path='', video_path=''):
+    def perform_capture(self, config=None, camera=None, camera_path='', video_path='', motion_path=''):
         """Captures images and generates the video from them."""
 
         camera_buffer = defaultdict(list)
@@ -325,11 +334,42 @@ class FoggyCam(object):
 
             try:
                 response = self.merlin.open(request)
-                time.sleep(5)
+                time.sleep(0.5)
 
                 with open(camera_path + '/' + file_id + '.jpg', 'wb') as image_file:
                     for chunk in response:
                         image_file.write(chunk)
+
+                # Add timestamp to images
+                now_utc = datetime.now(timezone('UTC'))
+                now_local = now_utc.astimezone(timezone('America/Phoenix'))
+                time_now = now_local.strftime('%Y-%m-%d %H:%M:%S')
+                input_image_path = camera_path + '/' + file_id + '.jpg'
+                tmpfile = camera_path + '/_' + file_id + '.jpg'
+                print ('image: ', image_file)
+                print ('timestamp: ', time_now)
+                os.rename(input_image_path, tmpfile)
+                photo = Image.open(tmpfile)
+ 
+                # make the image editable
+                drawing = ImageDraw.Draw(photo)
+                day_color = (3, 8, 12)
+                night_color = (236, 236, 236)
+                color = day_color
+                city = a['Phoenix']
+                now = datetime.now(pytz.utc)
+                sun = city.sun(date=now, local=True)
+                if now >= sun['dusk'] or now <= sun['dawn']:
+                     color = night_color
+                else:
+                     color = day_color
+                     
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 40)
+                pos = (0, 0)
+                drawing.text(pos, time_now, fill=color, font=font)
+                photo.show()
+                photo.save(input_image_path)
+                os.remove(tmpfile)
 
                 # Check if we need to compile a video
                 if config.produce_video:
@@ -364,7 +404,15 @@ class FoggyCam(object):
                         
                         if use_terminal or (os.path.isfile(ffmpeg_path) and use_terminal is False):
                             print ('INFO: Found ffmpeg. Processing video!')
-                            target_video_path = os.path.join(video_path, file_id + '.mp4')
+                            now_utc = datetime.now(timezone('UTC'))
+                            now_local = now_utc.astimezone(timezone('America/Phoenix'))
+                            time_now = now_local.strftime('%Y-%m-%d-%H-%M-%S')
+                            date_today = now_local.strftime('%Y-%m-%d')
+                            video_today_path = os.path.join(video_path, date_today)
+                            motion_today_path = os.path.join(motion_path, date_today)
+                            if not os.path.exists(video_today_path):
+                                os.makedirs(video_today_path)
+                            target_video_path = os.path.join(video_today_path, time_now + '.mp4')
                             process = Popen([ffmpeg_path, '-r', str(config.frame_rate), '-f', 'concat', '-safe', '0', '-i', concat_file_name, '-vcodec', 'libx264', '-crf', '25', '-pix_fmt', 'yuv420p', target_video_path], stdout=PIPE, stderr=PIPE)
                             process.communicate()
                             os.remove(concat_file_name)
@@ -386,6 +434,26 @@ class FoggyCam(object):
                                     deletion_target = os.path.join(camera_path, buffer_entry + '.jpg')
                                     print ('INFO: Deleting ' + deletion_target)
                                     os.remove(deletion_target)
+                                    
+                            # Scan for motion
+                            print ('INFO: Scanning for motion')
+                            if not os.path.exists(motion_today_path):
+                                os.makedirs(motion_today_path)
+                            target_motion_path = os.path.join(motion_today_path, time_now + '.avi')
+                            a = Astral()
+                            city = a['Phoenix']
+                            now = datetime.now(pytz.utc)
+                            sun = city.sun(date=now, local=True)
+                            if now >= sun['dusk'] or now <= sun['dawn']:
+                                process = Popen(['dvr-scan', '-i', target_video_path, '-o', target_motion_path, '-t', '0.15', '-l', '4', '-c', 'h264'])
+                                process.communicate()
+                            else:
+                                process = Popen(['dvr-scan', '-i', target_video_path, '-o', target_motion_path, '-t', '0.5', '-l', '4', '-c', 'h264'])
+                                process.communicate()
+                            motion_file_size = os.path.getsize(target_motion_path)
+                            if motion_file_size == 5686:
+                                os.remove(target_motion_path)
+                            print ('INFO: Scanning for motion complete')
                         else:
                             print ('WARNING: No ffmpeg detected. Make sure the binary is in /tools.')
 
