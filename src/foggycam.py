@@ -319,8 +319,7 @@ class FoggyCam(object):
         while self.is_capturing:
             # file_id = str(uuid.uuid4().hex)
             now_utc = datetime.now(timezone('UTC'))
-            now_local = now_utc.astimezone(timezone('America/Phoenix'))
-            file_id = str(int(now_local.timestamp()*1000000))
+            file_id = str(int(now_utc.timestamp()*1000000))
 
             utc_date = datetime.utcnow()
             utc_millis_str = str(int(utc_date.timestamp())*1000)
