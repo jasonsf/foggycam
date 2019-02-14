@@ -395,7 +395,10 @@ class FoggyCam(object):
                                 path = matches.group(1)
                                 filename = matches.group(2)
                                 
-                                image_time = datetime.fromtimestamp(int(filename)/1000000).strftime('%Y-%m-%d %H:%M:%S')
+                                file_utc = datetime.utcfromtimestamp(int(filename)/1000000)
+                                file_utc = file_utc.replace(tzinfo=pytz.UTC)
+                                file_local = file_utc.astimezone(timezone('America/Phoenix'))
+                                image_time = file_local.strftime('%Y-%m-%d %H:%M:%S')
                                 input_image_path = camera_path + '/' + filename + '.jpg'
                                 print ('Stamping ' + input_image_path + ' with ' + image_time)
                                 tmpfile = camera_path + '/_' + filename + '.jpg'
