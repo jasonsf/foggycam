@@ -22,6 +22,7 @@ from pytz import timezone
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
+import re
 
 class FoggyCam(object):
     """FoggyCam client class that performs capture operations."""
@@ -316,7 +317,10 @@ class FoggyCam(object):
         camera_buffer = defaultdict(list)
 
         while self.is_capturing:
-            file_id = str(uuid.uuid4().hex)
+            # file_id = str(uuid.uuid4().hex)
+            now_utc = datetime.now(timezone('UTC'))
+            now_local = now_utc.astimezone(timezone('America/Phoenix'))
+            file_id = str(int(now_local.timestamp()*1000000))
 
             utc_date = datetime.utcnow()
             utc_millis_str = str(int(utc_date.timestamp())*1000)
@@ -339,37 +343,6 @@ class FoggyCam(object):
                 with open(camera_path + '/' + file_id + '.jpg', 'wb') as image_file:
                     for chunk in response:
                         image_file.write(chunk)
-
-                # Add timestamp to images
-                now_utc = datetime.now(timezone('UTC'))
-                now_local = now_utc.astimezone(timezone('America/Phoenix'))
-                time_now = now_local.strftime('%Y-%m-%d %H:%M:%S')
-                input_image_path = camera_path + '/' + file_id + '.jpg'
-                tmpfile = camera_path + '/_' + file_id + '.jpg'
-
-                os.rename(input_image_path, tmpfile)
-                photo = Image.open(tmpfile)
- 
-                # make the image editable
-                drawing = ImageDraw.Draw(photo)
-                day_color = (3, 8, 12)
-                night_color = (236, 236, 236)
-                color = day_color
-                a = Astral()
-                city = a['Phoenix']
-                now = datetime.now(pytz.utc)
-                sun = city.sun(date=now, local=True)
-                if now >= sun['dusk'] or now <= sun['dawn']:
-                     color = night_color
-                else:
-                     color = day_color
-                     
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 40)
-                pos = (0, 0)
-                drawing.text(pos, time_now, fill=color, font=font)
-                photo.show()
-                photo.save(input_image_path)
-                os.remove(tmpfile)
 
                 # Check if we need to compile a video
                 if config.produce_video:
@@ -413,6 +386,44 @@ class FoggyCam(object):
                             if not os.path.exists(video_today_path):
                                 os.makedirs(video_today_path)
                             target_video_path = os.path.join(video_today_path, time_now + '.mp4')
+                            
+                            # Add timestamp to images
+                            regex = r"file '(.*/)(.*)\.jpg"
+                            input_file = open(concat_file_name, 'r')
+                            for line in input_file:
+                                matches = re.match(regex, line, re.I)
+                                path = matches.group(1)
+                                filename = matches.group(2)
+                                
+                                image_time = datetime.fromtimestamp(int(filename)/1000000).strftime('%Y-%m-%d %H:%M:%S')
+                                input_image_path = camera_path + '/' + filename + '.jpg'
+                                print ('Stamping ' + input_image_path + ' with ' + image_time)
+                                tmpfile = camera_path + '/_' + filename + '.jpg'
+
+                                os.rename(input_image_path, tmpfile)
+                                photo = Image.open(tmpfile)
+ 
+                                # make the image editable
+                                drawing = ImageDraw.Draw(photo)
+                                day_color = (3, 8, 12)
+                                night_color = (236, 236, 236)
+                                color = day_color
+                                a = Astral()
+                                city = a['Phoenix']
+                                now = datetime.now(pytz.utc)
+                                sun = city.sun(date=now, local=True)
+                                if now >= sun['dusk'] or now <= sun['dawn']:
+                                     color = night_color
+                                else:
+                                     color = day_color
+
+                                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 40)
+                                pos = (0, 0)
+                                drawing.text(pos, image_time, fill=color, font=font)
+                                photo.show()
+                                photo.save(input_image_path)
+                                os.remove(tmpfile)
+
                             process = Popen([ffmpeg_path, '-r', str(config.frame_rate), '-f', 'concat', '-safe', '0', '-i', concat_file_name, '-vcodec', 'libx264', '-crf', '25', '-pix_fmt', 'yuv420p', target_video_path], stdout=PIPE, stderr=PIPE)
                             process.communicate()
                             os.remove(concat_file_name)
