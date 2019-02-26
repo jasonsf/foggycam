@@ -11,7 +11,7 @@ CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'con
 print (CONFIG_PATH)
 
 CONFIG = json.load(open(CONFIG_PATH), object_hook=lambda d: namedtuple('X', d.keys())(*d.values()))
-
+print (CONFIG)
 CAM = FoggyCam(username=CONFIG.username, password=CONFIG.password)
-CAM.start()
+os.remove('/already_ran')
 CAM.capture_images(CONFIG)

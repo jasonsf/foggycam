@@ -390,41 +390,44 @@ class FoggyCam(object):
                             regex = r"file '(.*/)(.*)\.jpg"
                             input_file = open(concat_file_name, 'r')
                             for line in input_file:
-                                matches = re.match(regex, line, re.I)
-                                path = matches.group(1)
-                                filename = matches.group(2)
+                                try:
+                                    matches = re.match(regex, line, re.I)
+                                    path = matches.group(1)
+                                    filename = matches.group(2)
                                 
-                                file_utc = datetime.utcfromtimestamp(int(filename)/1000000)
-                                file_utc = file_utc.replace(tzinfo=pytz.UTC)
-                                file_local = file_utc.astimezone(timezone('America/Phoenix'))
-                                image_time = file_local.strftime('%Y-%m-%d %H:%M:%S')
-                                input_image_path = camera_path + '/' + filename + '.jpg'
-                                print ('Stamping ' + input_image_path + ' with ' + image_time)
-                                tmpfile = camera_path + '/_' + filename + '.jpg'
+                                    file_utc = datetime.utcfromtimestamp(int(filename)/1000000)
+                                    file_utc = file_utc.replace(tzinfo=pytz.UTC)
+                                    file_local = file_utc.astimezone(timezone('America/Phoenix'))
+                                    image_time = file_local.strftime('%Y-%m-%d %H:%M:%S')
+                                    input_image_path = camera_path + '/' + filename + '.jpg'
+                                    print ('Stamping ' + input_image_path + ' with ' + image_time)
+                                    tmpfile = camera_path + '/_' + filename + '.jpg'
 
-                                os.rename(input_image_path, tmpfile)
-                                photo = Image.open(tmpfile)
+                                    os.rename(input_image_path, tmpfile)
+                                    photo = Image.open(tmpfile)
  
-                                # make the image editable
-                                drawing = ImageDraw.Draw(photo)
-                                day_color = (3, 8, 12)
-                                night_color = (236, 236, 236)
-                                color = day_color
-                                a = Astral()
-                                city = a['Phoenix']
-                                now = datetime.now(pytz.utc)
-                                sun = city.sun(date=now, local=True)
-                                if now >= sun['dusk'] or now <= sun['dawn']:
-                                     color = night_color
-                                else:
-                                     color = day_color
+                                    # make the image editable
+                                    drawing = ImageDraw.Draw(photo)
+                                    day_color = (3, 8, 12)
+                                    night_color = (236, 236, 236)
+                                    color = day_color
+                                    a = Astral()
+                                    city = a['Phoenix']
+                                    now = datetime.now(pytz.utc)
+                                    sun = city.sun(date=now, local=True)
+                                    if now >= sun['dusk'] or now <= sun['dawn']:
+                                         color = night_color
+                                    else:
+                                         color = day_color
 
-                                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 40)
-                                pos = (0, 0)
-                                drawing.text(pos, image_time, fill=color, font=font)
-                                photo.show()
-                                photo.save(input_image_path)
-                                os.remove(tmpfile)
+                                    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 40)
+                                    pos = (0, 0)
+                                    drawing.text(pos, image_time, fill=color, font=font)
+                                    photo.show()
+                                    photo.save(input_image_path)
+                                    os.remove(tmpfile)
+                                except:
+                                    print ('Error stamping file ' + input_image_path)
 
                             process = Popen([ffmpeg_path, '-r', str(config.frame_rate), '-f', 'concat', '-safe', '0', '-i', concat_file_name, '-vcodec', 'libx264', '-crf', '25', '-pix_fmt', 'yuv420p', target_video_path], stdout=PIPE, stderr=PIPE)
                             process.communicate()
