@@ -3,7 +3,8 @@
 import json
 import os
 from collections import namedtuple
-from foggycam import FoggyCam
+# from foggycam import FoggyCam
+from foggycam_async import FoggyCam
 
 print ('Welcome to FoggyCam 1.0 - Nest video/image capture tool')
 
