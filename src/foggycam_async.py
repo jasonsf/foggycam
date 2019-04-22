@@ -23,6 +23,7 @@ from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
 import re
+from process_images import ProcessImages
 
 class FoggyCam(object):
     """FoggyCam client class that performs capture operations."""
@@ -315,8 +316,13 @@ class FoggyCam(object):
         """Captures images and generates the video from them."""
 
         camera_buffer = defaultdict(list)
-
+        
         while self.is_capturing:
+        
+            vidstart_utc = datetime.now(timezone('UTC'))
+            vidstart_local = vidstart_utc.astimezone(timezone('America/Phoenix'))
+            vidstart_now = vidstart_local.strftime('%Y-%m-%d-%H-%M-%S')
+            
             # file_id = str(uuid.uuid4().hex)
             now_utc = datetime.now(timezone('UTC'))
             file_id = str(int(now_utc.timestamp()*1000000))
@@ -324,10 +330,10 @@ class FoggyCam(object):
             utc_date = datetime.utcnow()
             utc_millis_str = str(int(utc_date.timestamp())*1000)
 
-            print ('Applied cache buster: ', utc_millis_str)
+            # print ('Applied cache buster: ', utc_millis_str)
 
             image_url = self.nest_image_url.replace('#CAMERAID#', camera).replace('#CBUSTER#', utc_millis_str).replace('#WIDTH#', str(config.width))
-
+            print ('Processing next image: ' + image_url)
             request = urllib.request.Request(image_url)
             request.add_header('accept', 'image/webp,image/apng,image/*,*/*;q=0.9')
             request.add_header('accept-encoding', 'gzip, deflate, br')
@@ -338,7 +344,6 @@ class FoggyCam(object):
             try:
                 response = self.merlin.open(request)
                 time.sleep(0.5)
-
                 with open(camera_path + '/' + file_id + '.jpg', 'wb') as image_file:
                     for chunk in response:
                         image_file.write(chunk)
@@ -357,7 +362,7 @@ class FoggyCam(object):
                         file_declaration = ''
                         for buffer_entry in camera_buffer[camera]:
                             file_declaration = file_declaration + 'file \'' + camera_image_folder + '/' + buffer_entry + '.jpg\'\n'
-                        concat_file_name = os.path.join(self.temp_dir_path, camera + '.txt')
+                        concat_file_name = os.path.join(self.temp_dir_path, vidstart_now + '.txt')
 
                         # Make sure that the content is decoded
 
@@ -375,108 +380,17 @@ class FoggyCam(object):
                             ffmpeg_path = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'tools', 'ffmpeg'))
                         
                         if use_terminal or (os.path.isfile(ffmpeg_path) and use_terminal is False):
-                           
-                            print ('INFO: Found ffmpeg. Processing video!')
-                            now_utc = datetime.now(timezone('UTC'))
-                            now_local = now_utc.astimezone(timezone('America/Phoenix'))
-                            time_now = now_local.strftime('%Y-%m-%d-%H-%M-%S')
-                            date_today = now_local.strftime('%Y-%m-%d')
-                            video_today_path = os.path.join(video_path, date_today)
-                            motion_today_path = os.path.join(motion_path, date_today)
-                            if not os.path.exists(video_today_path):
-                                os.makedirs(video_today_path)
-                            target_video_path = os.path.join(video_today_path, time_now + '.mp4')
+
+                            # Start async processing
+                            PI = ProcessImages(config, camera_buffer, video_path, motion_path, concat_file_name, camera_path, ffmpeg_path, camera, file_id)
+                            #end async processing
                             
-                            # Add timestamp to images
-                            regex = r"file '(.*/)(.*)\.jpg"
-                            input_file = open(concat_file_name, 'r')
-                            for line in input_file:
-                                try:
-                                    matches = re.match(regex, line, re.I)
-                                    path = matches.group(1)
-                                    filename = matches.group(2)
-                                
-                                    file_utc = datetime.utcfromtimestamp(int(filename)/1000000)
-                                    file_utc = file_utc.replace(tzinfo=pytz.UTC)
-                                    file_local = file_utc.astimezone(timezone('America/Phoenix'))
-                                    image_time = file_local.strftime('%Y-%m-%d %H:%M:%S')
-                                    input_image_path = camera_path + '/' + filename + '.jpg'
-                                    print ('Stamping ' + input_image_path + ' with ' + image_time)
-                                    tmpfile = camera_path + '/_' + filename + '.jpg'
-
-                                    os.rename(input_image_path, tmpfile)
-                                    photo = Image.open(tmpfile)
- 
-                                    # make the image editable
-                                    drawing = ImageDraw.Draw(photo)
-                                    day_color = (3, 8, 12)
-                                    night_color = (236, 236, 236)
-                                    color = day_color
-                                    a = Astral()
-                                    city = a['Phoenix']
-                                    now = datetime.now(pytz.utc)
-                                    sun = city.sun(date=now, local=True)
-                                    if now >= sun['dusk'] or now <= sun['dawn']:
-                                         color = night_color
-                                    else:
-                                         color = day_color
-
-                                    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", 40)
-                                    pos = (0, 0)
-                                    drawing.text(pos, image_time, fill=color, font=font)
-                                    photo.show()
-                                    photo.save(input_image_path)
-                                    os.remove(tmpfile)
-                                except:
-                                    print ('Error stamping file ' + input_image_path)
-
-                            process = Popen([ffmpeg_path, '-r', str(config.frame_rate), '-f', 'concat', '-safe', '0', '-i', concat_file_name, '-vcodec', 'libx264', '-crf', '25', '-pix_fmt', 'yuv420p', target_video_path], stdout=PIPE, stderr=PIPE)
-                            process.communicate()
-                            os.remove(concat_file_name)
-                            print ('INFO: Video processing is complete!')
-
-                            # Upload the video
-                            storage_provider = AzureStorageProvider()
-
-                            if bool(config.upload_to_azure):
-                                print ('INFO: Uploading to Azure Storage...')
-                                target_blob = 'foggycam/' + camera + '/' + file_id + '.mp4'
-                                storage_provider.upload_video(account_name=config.az_account_name, sas_token=config.az_sas_token, container='foggycam', blob=target_blob, path=target_video_path)
-                                print ('INFO: Upload complete.')
-
-                            # If the user specified the need to remove images post-processing
-                            # then clear the image folder from images in the buffer.
-                            if config.clear_images:
-                                for buffer_entry in camera_buffer[camera]:
-                                    deletion_target = os.path.join(camera_path, buffer_entry + '.jpg')
-                                    print ('INFO: Deleting ' + deletion_target)
-                                    os.remove(deletion_target)
-                                    
-                            # Scan for motion
-                            print ('INFO: Scanning for motion')
-                            if not os.path.exists(motion_today_path):
-                                os.makedirs(motion_today_path)
-                            target_motion_path = os.path.join(motion_today_path, time_now + '.avi')
-                            a = Astral()
-                            city = a['Phoenix']
-                            now = datetime.now(pytz.utc)
-                            sun = city.sun(date=now, local=True)
-                            if now >= sun['dusk'] or now <= sun['dawn']:
-                                process = Popen(['dvr-scan', '-i', target_video_path, '-o', target_motion_path, '-t', '0.5', '-l', '4', '-c', 'h264'])
-                                process.communicate()
-                            else:
-                                process = Popen(['dvr-scan', '-i', target_video_path, '-o', target_motion_path, '-t', '0.5', '-l', '4', '-c', 'h264'])
-                                process.communicate()
-                            motion_file_size = os.path.getsize(target_motion_path)
-                            if motion_file_size == 5686:
-                                os.remove(target_motion_path)
-                            print ('INFO: Scanning for motion complete')
-
                         else:
                             print ('WARNING: No ffmpeg detected. Make sure the binary is in /tools.')
 
                         # Empty buffer, since we no longer need the file records that we're planning
                         # to compile in a video.
+                        print ('Clearing camera buffer')
                         camera_buffer[camera] = []
 
             except urllib.request.HTTPError as err:
