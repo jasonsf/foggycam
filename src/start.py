@@ -13,7 +13,8 @@ print (CONFIG_PATH)
 
 CONFIG = json.load(open(CONFIG_PATH), object_hook=lambda d: namedtuple('X', d.keys())(*d.values()))
 # print (CONFIG)
-CAM = FoggyCam(username=CONFIG.username, password=CONFIG.password)
+# CAM = FoggyCam(username=CONFIG.username, password=CONFIG.password)
+CAM = FoggyCam(CONFIG)
 CAM.capture_images(CONFIG)
 try:
     os.remove('/already_ran')

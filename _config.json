@@ -1,6 +1,8 @@
 {
-    "username":"",
-    "password":"",
+    "issueToken": "",
+    "cookies": "",
+    "apiKey": "AIzaSyAdkSIMNc51XGNEAYWasX9UOWkS5P6sZE4",
+    "cam_retry_wait": 60,
     "path": "",
     "frame_rate": 12,
     "width": 1280,

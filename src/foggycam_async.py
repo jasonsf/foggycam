@@ -17,13 +17,15 @@ from datetime import datetime
 import subprocess
 from azurestorageprovider import AzureStorageProvider
 import shutil
+import requests
 from astral import Astral
 import pytz
 from pytz import timezone
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
-import re
+# import re
+from re import search as re_search
 
 class FoggyCam(object):
     """FoggyCam client class that performs capture operations."""
@@ -35,6 +37,9 @@ class FoggyCam(object):
     nest_access_token = ''
     nest_access_token_expiration = ''
     nest_current_user = None
+
+    nest_auth_url = 'https://nestauthproxyservice-pa.googleapis.com/v1/issue_jwt'
+    user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'
 
     nest_session_url = 'https://home.nest.com/session'
     nest_user_url = 'https://home.nest.com/api/0.1/user/#USERID#/app_launch'
@@ -57,11 +62,11 @@ class FoggyCam(object):
     local_path = ''
     image_list_queue = Queue()
 
-    def __init__(self, username, password):
-        self.nest_password = password
-        self.nest_username = username
-        self.cookie_jar = CookieJar()
-        self.merlin = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookie_jar))
+    def __init__(self, config):
+        # self.nest_password = password
+        # self.nest_username = username
+        # self.cookie_jar = CookieJar()
+        # self.merlin = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookie_jar))
 
         if not os.path.exists('_temp'):
             os.makedirs('_temp')
@@ -71,17 +76,18 @@ class FoggyCam(object):
 
         # It's important to try and load the cookies first to check
         # if we can avoid logging in.
-        try:
-            self.unpickle_cookies()
+        # try:
+        #     self.unpickle_cookies()
             
-            utc_date = datetime.utcnow()
-            utc_millis_str = str(int(utc_date.timestamp())*1000)
-            self.initialize_twof_session(utc_millis_str)
-        except:
-            print ("Failed to re-use the cookies. Re-initializing session...")
-            self.initialize_session()
+        #     utc_date = datetime.utcnow()
+        #     utc_millis_str = str(int(utc_date.timestamp())*1000)
+        #     self.initialize_twof_session(utc_millis_str)
+        # except:
+        #     print ("Failed to re-use the cookies. Re-initializing session...")
+        #     self.initialize_session()
         
-        self.login()
+        # self.login()
+        self.get_authorisation(config)
         self.initialize_user()
     
     def unpickle_cookies(self):
@@ -214,6 +220,74 @@ class FoggyCam(object):
 
         print ('INFO: Session initialization complete!')
 
+    def get_authorisation(self, config):
+        self.config = config
+
+        print(f"self.user_agent: \n{self.user_agent}")
+        print(f"self.config.cookies: \n{self.config.cookies}")
+        print(f"self.config.issueToken: \n{self.config.issueToken}")
+
+        """
+        Step 1: Get Bearer token with cookies and issue_token
+        Step 2: Use Bearer token to get an JWT access token, nestID
+        """
+        print("<> Getting Bearer token ...")
+        headers = {
+            'Sec-Fetch-Mode': 'cors',
+            'User-Agent': self.user_agent,
+            'X-Requested-With': 'XmlHttpRequest',
+            'Referer': 'https://accounts.google.com/o/oauth2/iframe',
+            'Cookie': self.config.cookies
+        }
+        # print(f"self.config.issueToken: \n{self.config.issueToken}")
+        # print(f"headers: \n{headers}")
+        status, resp = self.run_requests(self.config.issueToken, 'GET', headers=headers)
+        access_token = ''
+        # print(f'status: \n{status}')
+        # print(f'response: \n{resp}')
+        if status:
+            try:
+                access_token = resp.json().get('access_token')
+            except Exception as no_token_error:
+                print(f"ERROR: failed to get access_token with error: \n{no_token_error}")
+                exit(1)
+            print(f"<> Status: {resp.reason}")
+        else:
+            print(f"<> FAILED: unable to get Bearer token.")
+            exit(1)
+
+        print("<> Getting Google JWT authorisation token ...")
+        headers = {
+            'Referer': 'https://home.nest.com/',
+            'Authorization': 'Bearer ' + access_token,
+            'X-Goog-API-Key': self.config.apiKey,  # Nest public APIkey 'AIzaSyAdkSIMNc51XGNEAYWasX9UOWkS5P6sZE4'
+            'User-Agent': self.user_agent,
+        }
+        params = {
+            'embed_google_oauth_access_token': True,
+            'expire_after': '3600s',
+            'google_oauth_access_token': access_token,
+            'policy_id': 'authproxy-oauth-policy'
+        }
+
+        print(f"self.nest_auth_url: \n{self.nest_auth_url}")
+        print(f"headers: \n{headers}")
+        print(f"params: \n{params}")
+
+        status, resp = self.run_requests(self.nest_auth_url, method='POST', headers=headers, params=params)
+        if status:
+            try:
+                self.nest_access_token = resp.json().get('jwt')
+                # self.nest_access_token_expiration = resp.json().get('claims').get('expirationTime')
+                self.nest_user_id = resp.json().get('claims').get('subject').get('nestId').get('id')
+            except Exception as jwt_error:
+                print(f"ERROR: failed to get JWT access token with error: \n{jwt_error}")
+                exit(1)
+            print(f"<> Status: {resp.reason}")
+        else:
+            print(f"<> FAILED: unable to get JWT authorisation token.")
+            exit(1)
+
     def login(self):
         """Performs user login to get the website_2 cookie."""
 
@@ -234,7 +308,7 @@ class FoggyCam(object):
 
         print (session_data)
 
-    def initialize_user(self):
+    def initialize_user_old(self):
         """Gets the assets belonging to Nest user."""
 
         print ('INFO: Initializing current user...')
@@ -268,6 +342,55 @@ class FoggyCam(object):
                 print (camera_id)
                 self.nest_camera_array.append(camera_id)
 
+    def initialize_user(self):
+        """Gets the assets belonging to Nest user."""
+
+        user_url = self.nest_user_url.replace('#USERID#', self.nest_user_id)
+
+        print("<> Getting user's nest cameras assets ...")
+
+        headers = {
+        'Authorization': f"Basic {self.nest_access_token}",
+        'Content-Type': 'application/json'
+        }
+
+        user_object = None
+
+        payload = self.nest_user_request_payload
+        status, resp = self.run_requests(user_url, method='POST', headers=headers, payload=payload)
+        if status:
+            try:
+                user_object = resp.json()
+            except Exception as assets_error:
+                print(f"ERROR: failed to get user's assets error: \n{assets_error}")
+                exit(1)
+            print(f"<> Status: {resp.reason}")
+
+        # user_object = resp.json()
+        for bucket in user_object['updated_buckets']:
+            bucket_id = bucket['object_key']
+            if bucket_id.startswith('quartz.'):
+                print("<> INFO: Detected camera configuration.")
+
+            # Attempt to get cameras API region
+            try:
+                nexus_api_http_server_url = bucket['value']['nexus_api_http_server_url']
+                region = re_search('https://nexusapi-(.+?).dropcam.com', nexus_api_http_server_url).group(1)
+            except AttributeError:
+                # Failed to find region - default back to us1
+                region = 'us1'
+            camera = {
+                'name': bucket['value']['description'].replace(' ', '_'),
+                'uuid': bucket_id.replace('quartz.', ''),
+                'streaming_state': bucket['value']['streaming_state'],
+                'region': region
+            }
+            # print(f"<> DEBUG: {bucket}")
+            print(f"<> INFO: Camera Name: '{camera['name']}' UUID: '{camera['uuid']}' "
+                    f"STATE: '{camera['streaming_state']}'")
+            self.nest_camera_array.append(camera)
+        
+           
     def capture_images(self, config=None):
         """Starts the multi-threaded image capture process."""
 
@@ -280,21 +403,25 @@ class FoggyCam(object):
 
         self.nest_camera_buffer_threshold = config.threshold
 
+        # print(f'self.nest_camera_array \n{self.nest_camera_array}')
+        # print(f'camer uuid \n{self.nest_camera_array[0]["uuid"]}')
+
         for camera in self.nest_camera_array:
             camera_path = ''
             video_path = ''
             motion_path = ''
+            camera_uuid = camera["uuid"]
 
             # Determine whether the entries should be copied to a custom path
             # or not.
             if not config.path:
-                camera_path = os.path.join(self.local_path, 'capture', camera, 'images')
-                video_path = os.path.join(self.local_path, 'capture', camera, 'video')
-                motion_path = os.path.join(self.local_path, 'capture', camera, 'motion')
+                camera_path = os.path.join(self.local_path, 'capture', camera_uuid, 'images')
+                video_path = os.path.join(self.local_path, 'capture', camera_uuid, 'video')
+                motion_path = os.path.join(self.local_path, 'capture', camera_uuid, 'motion')
             else:
-                camera_path = os.path.join(config.path, 'capture', camera, 'images')
-                video_path = os.path.join(config.path, 'capture', camera, 'video')
-                motion_path = os.path.join(config.path, 'capture', camera, 'motion')
+                camera_path = os.path.join(config.path, 'capture', camera_uuid, 'images')
+                video_path = os.path.join(config.path, 'capture', camera_uuid, 'video')
+                motion_path = os.path.join(config.path, 'capture', camera_uuid, 'motion')
 
             # Provision the necessary folders for images and videos.
             if not os.path.exists(camera_path):
@@ -322,7 +449,7 @@ class FoggyCam(object):
             if use_terminal or (os.path.isfile(ffmpeg_path) and use_terminal is False):
                 # Start async processing
                 print ('[', threading.current_thread().name, '] starting processing thread')
-                t2 = threading.Thread(target=self.process_images, args=(config, video_path, motion_path, camera_path, ffmpeg_path, camera))
+                t2 = threading.Thread(target=self.process_images, args=(config, video_path, motion_path, camera_path, ffmpeg_path, camera_uuid))
                 t2.start()
                 t2.join()
                 print ('[', threading.current_thread().name, '] t2 has returned')
@@ -340,7 +467,7 @@ class FoggyCam(object):
         """Captures images and generates the video from them."""
 
         camera_buffer = defaultdict(list)
-        
+        camera_uuid = camera["uuid"]
         while self.is_capturing:
         
             vidstart_utc = datetime.now(timezone('UTC'))
@@ -356,17 +483,32 @@ class FoggyCam(object):
 
             # print ('Applied cache buster: ', utc_millis_str)
 
-            image_url = self.nest_image_url.replace('#CAMERAID#', camera).replace('#CBUSTER#', utc_millis_str).replace('#WIDTH#', str(config.width))
+            # image_url = self.nest_image_url.replace('#CAMERAID#', camera_uuid).replace('#CBUSTER#', utc_millis_str).replace('#WIDTH#', str(config.width))
+            image_url = self.nest_image_url.replace('#CAMERAID#', camera['uuid']
+                                            ).replace('#WIDTH#', str(self.config.width)
+                                                      ).replace('#REGION#', camera['region'])
+            image_url = image_url.replace('#CBUSTER#', utc_millis_str)
             # print ('Processing next image: ' + image_url)
-            request = urllib.request.Request(image_url)
-            request.add_header('accept', 'image/webp,image/apng,image/*,*/*;q=0.9')
-            request.add_header('accept-encoding', 'gzip, deflate, br')
-            request.add_header('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36')
-            request.add_header('referer','https://home.nest.com/')
-            request.add_header('authority','nexusapi-us1.camera.home.nest.com')
+            # request = urllib.request.Request(image_url)
+            # request.add_header('accept', 'image/webp,image/apng,image/*,*/*;q=0.9')
+            # request.add_header('accept-encoding', 'gzip, deflate, br')
+            # request.add_header('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36')
+            # request.add_header('referer','https://home.nest.com/')
+            # request.add_header('authority','nexusapi-us1.camera.home.nest.com')
+
+            headers = {
+                'Origin': 'https://home.nest.com',
+                'Referer': 'https://home.nest.com/',
+                'Authorization': 'Basic ' + self.nest_access_token,
+                'accept': 'image/webp,image/apng,image/*,*/*;q=0.9',
+                'accept-encoding': 'gzip, deflate, br',
+                'user-agent': self.user_agent,
+            }
+
+            status, resp = self.run_requests(image_url, method='GET', headers=headers)
 
             try:
-                response = self.merlin.open(request)
+                response = resp
                 time.sleep(0.5)
                 with open(camera_path + '/' + file_id + '.jpg', 'wb') as image_file:
                     for chunk in response:
@@ -374,17 +516,17 @@ class FoggyCam(object):
 
                 # Check if we need to compile a video
                 if config.produce_video:
-                    camera_buffer_size = len(camera_buffer[camera])
-                    print ('[', threading.current_thread().name, '] INFO: Camera buffer size for ', camera, ': ', camera_buffer_size)
+                    camera_buffer_size = len(camera_buffer[camera_uuid])
+                    print ('[', threading.current_thread().name, '] INFO: Camera buffer size for ', camera_uuid, ': ', camera_buffer_size)
 
                     if camera_buffer_size < self.nest_camera_buffer_threshold:
-                        camera_buffer[camera].append(file_id)
+                        camera_buffer[camera_uuid].append(file_id)
                     else:
                         camera_image_folder = os.path.join(self.local_path, camera_path)
 
                         # Build the batch of files that need to be made into a video.
                         file_declaration = ''
-                        for buffer_entry in camera_buffer[camera]:
+                        for buffer_entry in camera_buffer[camera_uuid]:
                             file_declaration = file_declaration + 'file \'' + camera_image_folder + '/' + buffer_entry + '.jpg\'\n'
                         concat_file_name = os.path.join(self.temp_dir_path, vidstart_now + '.txt')
 
@@ -399,7 +541,7 @@ class FoggyCam(object):
                         # Empty buffer, since we no longer need the file records that we're planning
                         # to compile in a video.
                         print ('[', threading.current_thread().name, '] Clearing camera buffer')
-                        camera_buffer[camera] = []
+                        camera_buffer[camera_uuid] = []
 
             except urllib.request.HTTPError as err:
                 if err.code == 403:
@@ -421,7 +563,7 @@ class FoggyCam(object):
         # self.concat_file_name = concat_file_name
         self.camera_path = camera_path
         self.ffmpeg_path = ffmpeg_path
-        self.camera = camera 
+        self.camera = camera
         # self.file_id = file_id
 
         now_utc = datetime.now(timezone('UTC'))
@@ -576,3 +718,30 @@ class FoggyCam(object):
             else:
                 print ('[', threading.current_thread().name, '] file list queue empty')
                 # self.image_list_queue.task_done()
+    @staticmethod
+    def run_requests(url, method, headers=None, params=None, payload=None):
+        # print(f'run_requests: url\n{url}')
+        # print(f'run_requests: method\n{method}')
+        # print(f'run_requests: headers\n{headers}')
+        # print(f'run_requests: params\n{params}')
+        # print(f'run_requests: payload\n{payload}')
+
+        X = ''
+        method = method.lower()
+        try:
+            with requests.Session() as s:
+                if method == 'get':
+                    r = s.get(url=url, headers=headers)
+                elif method == 'post':
+                    r = s.post(url=url, headers=headers, params=params, json=payload)
+                else:
+                    class X: reason = f"Failed: un-managed method: {method}"
+                    return False, X
+                return True, r
+        except Exception as all_error:
+            print("<> ERROR: failed to perform request using: \n"
+                    f"<> URL: {url}\n"
+                    f"<> HEADERS: {headers}\n"
+                    f"<> PARAMS: {params}\n"
+                    f"<> RECEIVED ERROR: \n{all_error}")
+            return False, all_error
