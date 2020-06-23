@@ -7,7 +7,7 @@ if [ -f "already_ran" ]; then
     cat
 else
     echo "Not creating hold file"
-     touch already_ran
+    #touch already_ran
 fi
 
 cd /foggycam/src
