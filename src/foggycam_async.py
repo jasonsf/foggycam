@@ -6,6 +6,7 @@ import urllib
 import json
 from http.cookiejar import CookieJar
 import os
+import sys
 from collections import defaultdict
 import traceback
 from subprocess import Popen, PIPE
@@ -407,7 +408,7 @@ class FoggyCam(object):
                 # Check if we need to compile a video
                 if config.produce_video:
                     camera_buffer_size = len(camera_buffer[camera_uuid])
-                    print ('[', threading.current_thread().name, '] INFO: Camera buffer size for ', camera_uuid, ': ', camera_buffer_size)
+                    #print ('[', threading.current_thread().name, '] INFO: Camera buffer size for ', camera_uuid, ': ', camera_buffer_size)
 
                     if camera_buffer_size < self.nest_camera_buffer_threshold:
                         camera_buffer[camera_uuid].append(file_id)
@@ -476,7 +477,7 @@ class FoggyCam(object):
             print ('[', threading.current_thread().name, '] Starting processing loop')
             concat_file_name = self.image_list_queue.get()
             if concat_file_name:
-                print ('[', threading.current_thread().name, '] Beging processing ', concat_file_name)
+                #print ('[', threading.current_thread().name, '] Beging processing ', concat_file_name)
                 regex = r"file '(.*/)(.*)\.jpg"
                 f = open(concat_file_name, 'r')
                 file_contents = f.read()
@@ -494,10 +495,10 @@ class FoggyCam(object):
                             file_local = file_utc.astimezone(timezone('America/Phoenix'))
                             image_time = file_local.strftime('%Y-%m-%d %H:%M:%S')
                             input_image_path = camera_path + '/' + filename + '.jpg'
-                            print ('[', threading.current_thread().name, '] Stamping ' + filename + '.jpg with ' + image_time)
+                            #print ('[', threading.current_thread().name, '] Stamping ' + filename + '.jpg with ' + image_time)
                             tmpfile = camera_path + '/_' + filename + '.jpg'
-                            print(f'input_image_path,\n {input_image_path}')
-                            print(f'tmpfile,\n {tmpfile}')
+                            #print(f'input_image_path,\n {input_image_path}')
+                            #print(f'tmpfile,\n {tmpfile}')
                             os.rename(input_image_path, tmpfile)
                             photo = Image.open(tmpfile)
 
@@ -520,7 +521,8 @@ class FoggyCam(object):
                             drawing.text(pos, image_time, fill=color, font=font)
                             photo.show()
                             photo.save(input_image_path)
-                            os.remove(tmpfile)
+                            if os.path.exists(input_image_path):
+                                os.remove(tmpfile)
                         except:
                             print ('[', threading.current_thread().name, '] Error stamping file ' + input_image_path)
 
@@ -555,7 +557,7 @@ class FoggyCam(object):
                                     file_local = file_utc.astimezone(timezone('America/Phoenix'))
                                     image_time = file_local.strftime('%Y-%m-%d %H:%M:%S')
                                     input_image_path = camera_path + '/' + filename + '.jpg'
-                                    print ('[', threading.current_thread().name, '] Deleting ' + input_image_path)
+                                    #print ('[', threading.current_thread().name, '] Deleting ' + input_image_path)
                                     os.remove(input_image_path)
                                 except:
                                     print ('[', threading.current_thread().name, '] Error deleting images')    
@@ -591,7 +593,10 @@ class FoggyCam(object):
                             os.remove(target_motion_path)
                         print ('[', threading.current_thread().name, '] INFO: Scanning for motion complete')
                     else:
-                        print ('[', threading.current_thread().name, '] ERROR: Input file doesn\'t exist')
+                        print ('[', threading.current_thread().name, '] ERROR: Input file doesn\'t exist: ', target_video_path)
+                        process = Popen(['find', '/Recordings/capture/4c0468d351074403b6093783423628b0/images', '-type', 'f', '-mmin', '+30', '-delete'])
+                        os.execl(sys.executable, *([sys.executable]+sys.argv))
+                        exit(self)
                 # self.image_list_queue.task_done()
             else:
                 print ('[', threading.current_thread().name, '] file list queue empty')
