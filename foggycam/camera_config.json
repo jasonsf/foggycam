@@ -1,0 +1,10 @@
+﻿{
+  "ffmpeg_path": "",
+  "issue_token": "",
+  "api_key": "",
+  "user_agent": "",
+  "cookie": "",
+  "nest_api_hostname": "https://home.nest.com",
+  "camera_api_hostname": "https://webapi.camera.home.nest.com",
+  "camera_auth_cookie": "website_ft"
+}

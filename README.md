@@ -1,62 +1,33 @@
-# 📹 foggycam
+# 📹 FoggyCam - Nest Camera Recorder
 
-![Build Status](https://travis-ci.org/dend/foggycam.svg?branch=master)
+![FoggyCam Logo](/media/foggycam-logo.png)
 
-A tool to capture Nest video streams locally or to the Azure cloud, even for users without a Nest subscription. The current release is tested on macOS. Windows and Linux adaptations coming soon (minor tweaks required).
+A tool to locally capture your own Nest camera stream. You can read more about my approach in the [recently published blog post](https://den.dev/blog/free-nest-video-recording/). This approach supersedes the previous implementation that relied on the `/get_image` API and instead captures the H.264 stream directly through the Nest WebSocket service.
 
->**NOTE:** Audio recording is currently not supported.
+## Configuration
 
-## How To Configure
+To get the project to work, edit [`camera_config.json`](/foggycam/camera_config.json).
 
-Rename `_config.json` to `config.json` and specify the following parameters:
+| Setting | Description |
+|:--------|:------------|
+| `ffmpeg_path` | Local path to the FFMPEG executable. You can [download FFMPEG](https://ffmpeg.org/download.html) for free. |
+| `issue_token` | TThe full URL to the `iframerpc` network call when logging in to https://home.nest.com. You can capture it through your browser. |
+| `api_key` | If you have a `x-goog-api-key` value from existing network calls, use it here. Otherwise, skip the value. |
+| `user_agent` | The user agent for your web browser. |
+| `cookie` | The value of the cookie from the response to the `iframerpc` network call when logging in to https://home.nest.com. You can capture it through your browser. |
 
-|Parameter|Description|
-|-----|-----|
-|`username`|Nest account username.|
-|`password`|Nest account password.|
-|`path`|Absolute path to local folder where content needs to be stored.<br/><br/>Default is the script path.|
-|`frame_rate`|Frame rate for the generated video.<br/><br/>Default is 24.|
-|`threshold`|Number of images that need to be combined in a video in a single buffer.<br/><br/>Default is 200.|
-|`width`|Image width for the capture image.<br/><br/>Default is 1280.|
-|`clear_images`|Determines whether images are removed after video is produced.<br/><br/>Default is false.|
-|`produce_video`|Determines whether a video is generated after a threshold of captured images is hit.<br/><br/>Default is false.|
-|`upload_to_azure`|Determines whether the final video will be uploaded to Azure Storage.<br/><br/>Default is false.|
-|`az_account_name`|Name of the Azure Storage account.|
-|`az_sas_token`|SAS token for the Azure Storage account. Should have `write`, `list` and `read` permissions.|
+## Running the application
 
+Open `foggycam.sln` in Visual Studio and build the application. In the long run, I will make sure to make this easier and remove the need to use Visual Studio.
 
-**If you want to generate video**, you will need to [download `ffmpeg`](https://www.ffmpeg.org/download.html) and place it in the `tools` folder, in the script root directory.
+## OS Support
 
-Alternatively, if you are on Linux, you can install `ffmpeg` with the help of the following command:
+| Operating System | Status |
+|:-----------------|:-------|
+| Windows          | ✅ Tested & supported |
+| macOS            | 🙋‍♂️ Untested |
+| Linux            | 🙋‍♂️ Untested |
 
-```
-sudo apt-get install ffmpeg
-```
+## Feedback
 
-On macOS, you can install `ffmpeg` through [Homebrew](https://brew.sh):
-
-```
-brew install ffmpeg
-```
-
-## How To Start
-
-Make sure you install the requirements for the project, by `cd`-ing in the folder with the project, and running:
-
-```
-pip install -r requirements.txt
-```
-
-Run `python start.py` after you configured the settings above. Exit by pressing <kbd>Ctrl</kbd>+<kbd>C</kbd>.
-
-## Disclaimer
-
-No claims are made in regards to the stability of the application, or its applicability for your purposes. Use at your own risk. Code is licensed under the [MIT License](https://opensource.org/licenses/MIT). Code can change at any time with no prior notice.
-
-**DO NOT USE** in critical security/surveillance scenarios.
-
-## Troubleshooting
-
-## Getting `urlopen error [SSL: CERTIFICATE_VERIFY_FAILED]`
-
-On macOS, run  `pip install certifi` and then `/Applications/Python\ 3.6/Install\ Certificates.command`.
+Use [issues](https://github.com/dend/foggycam/issues) or [ping me on Twitter](https://twitter.com/denniscode).

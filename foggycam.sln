@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30804.86
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "foggycam", "foggycam\foggycam.csproj", "{32EEF726-2F87-46BE-867B-85EAA0823463}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{32EEF726-2F87-46BE-867B-85EAA0823463}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{32EEF726-2F87-46BE-867B-85EAA0823463}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{32EEF726-2F87-46BE-867B-85EAA0823463}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{32EEF726-2F87-46BE-867B-85EAA0823463}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {5ED2AE5E-7617-4B17-845E-7579BDBDB79A}
+	EndGlobalSection
+EndGlobal
