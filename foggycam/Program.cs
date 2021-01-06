@@ -1,4 +1,6 @@
-﻿using foggycam.Models;
+﻿//Linux build: dotnet build --runtime ubuntu.16.04-x64
+
+using foggycam.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ProtoBuf;
@@ -167,11 +169,17 @@ namespace foggycam
             }
             audioStream.Clear();
 
-            DumpToFile(videoBuffer, audioBuffer, DateTime.Now.ToString("yyyy-dd-M--HH-mm-ss") + ".mp4");
+            DumpToFile(videoBuffer, audioBuffer, DateTime.Now.ToString("yyyy-MM-dd--HH-mm-ss") + ".mp4");
         }
 
         static void DumpToFile(List<byte[]> videoBuffer, List<byte[]> audioBuffer, string filename)
         {
+            var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
+            if (!Directory.Exists(string.Concat(CONFIG.video_output_folder, dateFolder)))
+            {
+                Directory.CreateDirectory(string.Concat(CONFIG.video_output_folder, dateFolder));
+            }
+            var outputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/", filename);
             var startInfo = new ProcessStartInfo(CONFIG.ffmpeg_path.ToString());
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
@@ -179,21 +187,21 @@ namespace foggycam
             startInfo.UseShellExecute = false;
 
             var argumentBuilder = new List<string>();
-            argumentBuilder.Add("-loglevel panic");
+            argumentBuilder.Add("-loglevel info");
             argumentBuilder.Add("-f h264");
             argumentBuilder.Add("-i pipe:");
             argumentBuilder.Add("-c:v libx264");
             argumentBuilder.Add("-bf 0");
             argumentBuilder.Add("-pix_fmt yuv420p");
             argumentBuilder.Add("-an");
-            argumentBuilder.Add(filename);
+            argumentBuilder.Add(outputPath);
 
             startInfo.Arguments = string.Join(" ", argumentBuilder.ToArray());
 
             var _ffMpegProcess = new Process();
             _ffMpegProcess.EnableRaisingEvents = true;
-            _ffMpegProcess.OutputDataReceived += (s, e) => { Debug.WriteLine(e.Data); };
-            _ffMpegProcess.ErrorDataReceived += (s, e) => { Debug.WriteLine(e.Data); };
+            _ffMpegProcess.OutputDataReceived += (s, e) => { Console.WriteLine(e.Data); };
+            _ffMpegProcess.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };
 
             _ffMpegProcess.StartInfo = startInfo;
 
@@ -211,6 +219,44 @@ namespace foggycam
             _ffMpegProcess.StandardInput.BaseStream.Close();
 
             Console.WriteLine($"[log] Writing of {filename} completed.");
+            ScanForMotion(dateFolder, filename);
+        }
+
+        static void ScanForMotion(string dateFolder, string filename)
+        {
+            if (!Directory.Exists(string.Concat(CONFIG.video_output_folder, dateFolder)))
+            {
+                Directory.CreateDirectory(string.Concat(CONFIG.video_motion_folder, dateFolder));
+            }
+
+            var inputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/", filename);
+            var outputPath = string.Concat(CONFIG.video_motion_folder, dateFolder, "/", filename);
+            var startInfo = new ProcessStartInfo(CONFIG.dvrscan_path.ToString());
+            startInfo.RedirectStandardInput = true;
+            startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
+            startInfo.UseShellExecute = false;
+
+            var argumentBuilder = new List<string>();
+            argumentBuilder.Add("-i " + inputPath);
+            argumentBuilder.Add("-o " + outputPath);
+            argumentBuilder.Add("-t 0.5");
+            argumentBuilder.Add("-l 4");
+            argumentBuilder.Add("-c xvid");
+
+            startInfo.Arguments = string.Join(" ", argumentBuilder.ToArray());
+
+            var _dvrscanProcess = new Process();
+            _dvrscanProcess.EnableRaisingEvents = true;
+            _dvrscanProcess.OutputDataReceived += (s, e) => { Console.WriteLine(e.Data); };
+            _dvrscanProcess.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };
+
+            _dvrscanProcess.StartInfo = startInfo;
+
+            Console.WriteLine($"[log] Starting motion check to {filename}...");
+
+            _dvrscanProcess.Start();
+            Console.WriteLine($"[log] {filename} motion completed.");
         }
 
         static void SetupConnection(string host, string cameraUuid, string deviceId, string token)
@@ -321,7 +367,7 @@ namespace foggycam
                     Buffer.BlockCopy(buffer, 1, lengthBytes, 0, lengthBytes.Length);
                     Array.Reverse(lengthBytes);
                     length = BitConverter.ToUInt32(lengthBytes);
-                    Console.WriteLine("[log] Declared long playback packet length: " + length);
+                    //Console.WriteLine("[log] Declared long playback packet length: " + length);
                 }
                 else
                 {
@@ -330,7 +376,7 @@ namespace foggycam
                     Buffer.BlockCopy(buffer, 1, lengthBytes, 0, lengthBytes.Length);
                     Array.Reverse(lengthBytes);
                     length = BitConverter.ToUInt16(lengthBytes);
-                    Console.WriteLine("[log] Declared playback packet length: " + length);
+                    //Console.WriteLine("[log] Declared playback packet length: " + length);
                 }
 
                 var payloadEndPosition = length + headerLength;
@@ -362,7 +408,7 @@ namespace foggycam
                     StartPlayback(CAMERA.items[0]);
                     break;
                 case PacketType.PING:
-                    Console.WriteLine("[log] Ping.");
+                    //Console.WriteLine("[log] Ping.");
                     break;
                 case PacketType.PLAYBACK_BEGIN:
                     HandlePlaybackBegin(rawPayload);
@@ -380,8 +426,8 @@ namespace foggycam
                     HandleError(rawPayload);
                     break;
                 default:
-                    Console.WriteLine(type);
-                    Console.WriteLine("[streamer] Unknown type.");
+                    //Console.WriteLine(type);
+                    //Console.WriteLine("[streamer] Unknown type.");
                     break;
             }
         }
@@ -415,7 +461,7 @@ namespace foggycam
 
                 if (packet.channel_id == videoChannelId)
                 {
-                    Console.WriteLine("[log] Video packet received.");
+                    //Console.WriteLine("[log] Video packet received.");
                     byte[] h264Header = { 0x00, 0x00, 0x00, 0x01 };
                     var writingBlock = new byte[h264Header.Length + packet.payload.Length];
                     h264Header.CopyTo(writingBlock, 0);
@@ -425,7 +471,7 @@ namespace foggycam
                 }
                 else if (packet.channel_id == audioChannelId)
                 {
-                    Console.WriteLine("[log] Audio packet received.");
+                    //Console.WriteLine("[log] Audio packet received.");
                     audioStream.Add(packet.payload);
                 }
                 else
@@ -434,8 +480,8 @@ namespace foggycam
                 }
             }
 
-            Console.WriteLine($"[log] Video buffer length: {videoStream.Count}");
-            Console.WriteLine($"[log] Socket state: {ws.State}");
+            //Console.WriteLine($"[log] Video buffer length: {videoStream.Count}");
+            //Console.WriteLine($"[log] Socket state: {ws.State}");
             // Once we reach a certain threshold, let's make sure that we flush the buffer.
             if (videoStream.Count > 1000)
             {

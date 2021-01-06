@@ -1,10 +1,13 @@
 ﻿{
-  "ffmpeg_path": "",
-  "issue_token": "",
-  "api_key": "",
-  "user_agent": "",
-  "cookie": "",
+  "ffmpeg_path": "\/usr\/bin\/ffmpeg",
+  "issue_token": "https://accounts.google.com/o/oauth2/iframerpc?action=issueToken&response_type=token%20id_token&login_hint=AJDLj6LQu-SMCQLMJfOUep6S7tCejAupgd1zbE5cygHIr3QZhNHHw4vRfla01A1kQ3W35qz8nuBcCCQaCsvhw-OVIIr3AY-70A&client_id=733249279899-44tchle2kaa9afr5v9ov7jbuojfr9lrq.apps.googleusercontent.com&origin=https%3A%2F%2Fhome.nest.com&scope=openid%20profile%20email%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fnest-account&ss_domain=https%3A%2F%2Fhome.nest.com",
+  "api_key": "AIzaSyAdkSIMNc51XGNEAYWasX9UOWkS5P6sZE4",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36",
+  "cookie": "__Secure-3PSID=4wcM0k_dlxzwEkGMxU9pQt4ahn8t5sBNko0-JQHkDtTCoVuLefXNzWxPQKeYk-FpyYAG7Q.; __Host-3PLSID=4wcM0vzv7Pn3vhBJrfv9L-wc64Lnv5XiZIh_LqEsOPd6ZjmLug8D5-aNG2uxsRqXZSLTBg.; __Secure-3PAPISID=4nxvvEvPJ0TN3wEq/AfLdBf8ENmH-M_amD; NID=205=l8lcBiM8Vcf37AV-y-0VrbgtGJpPV5LAjzeztTPLOVcVci-y_SnjKJNa6oZZEbnI8BTR4hftBOKpakruxhf6zE6PBpEQvVfY1mhayDyiaBehrXpI3Cz1lv5VkLCNi-KtOjTvCRowKHX7528OuRVOajb5QxaNz62T0_mTBO17WrHwhRtLs7vbTfsUaZtx098cxQ; __Secure-3PSIDCC=AJi4QfEZCXMesP3VH6J_9zG5NR6JW3Ff07nNKWRVbe9Qdd-6xUlf2GQmwhIViCUR4YlzmZDp",
   "nest_api_hostname": "https://home.nest.com",
   "camera_api_hostname": "https://webapi.camera.home.nest.com",
-  "camera_auth_cookie": "website_ft"
+  "camera_auth_cookie": "website_ft",
+  "video_output_folder": "\/Recordings\/capture\/4c0468d351074403b6093783423628b0\/video\/",
+  "video_motion_folder": "\/Recordings\/capture\/4c0468d351074403b6093783423628b0\/motion\/",
+  "dvrscan_path": "\/usr\/local\/bin\/dvr-scan"
 }
