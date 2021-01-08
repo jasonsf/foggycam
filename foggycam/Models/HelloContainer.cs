@@ -6,32 +6,32 @@ namespace foggycam.Models
     public class HelloContainer
     {
         [ProtoMember(1)]
-        public int? protocol_version { get; set; }
+        public int? ProtocolVersion { get; set; }
         [ProtoMember(2)]
-        public string? uuid { get; set; }
+        public string? Uuid { get; set; }
         [ProtoMember(3)]
-        public bool? require_connected_camera { get; set; }
+        public bool? RequireConnectedCamera { get; set; }
         [ProtoMember(4)]
-        public string? session_token { get; set; }
+        public string? SessionToken { get; set; }
         [ProtoMember(5)]
-        public bool? is_camera { get; set; }
+        public bool? IsCamera { get; set; }
         [ProtoMember(6)]
-        public string? device_id { get; set; }
+        public string? DeviceId { get; set; }
         [ProtoMember(7)]
-        public string? user_agent { get; set; }
+        public string? UserAgent { get; set; }
         [ProtoMember(8)]
-        public string? service_access_key { get; set; }
+        public string? ServiceAccessKey { get; set; }
         [ProtoMember(9)]
-        public int? client_type { get; set; }
+        public int? ClientType { get; set; }
         [ProtoMember(10)]
-        public string? wwn_access_token { get; set; }
+        public string? WwnAccessToken { get; set; }
         [ProtoMember(11)]
-        public string? encrypted_device_id { get; set; }
+        public string? EncryptedDeviceId { get; set; }
         [ProtoMember(12)]
-        public byte[]? authorize_request { get; set; }
+        public byte[]? AuthorizeRequest { get; set; }
         [ProtoMember(13)]
-        public string? client_ip_address { get; set; }
+        public string? ClientIpAddress { get; set; }
         [ProtoMember(16)]
-        public bool? require_owner_server { get; set; }
+        public bool? RequireOwnerServer { get; set; }
     }
 }

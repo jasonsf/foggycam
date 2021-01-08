@@ -6,8 +6,8 @@ namespace foggycam.Models
     public class Redirect
     {
         [ProtoMember(1)]
-        public string new_host { get; set; }
+        public string NewHost { get; set; }
         [ProtoMember(2)]
-        public bool is_transcode { get; set; }
+        public bool IsTranscode { get; set; }
     }
 }

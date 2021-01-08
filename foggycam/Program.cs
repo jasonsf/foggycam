@@ -30,8 +30,6 @@ namespace foggycam
 
         static WebSocket ws;
 
-        static bool authorized = false;
-
         static int videoChannelId = -1;
         static int audioChannelId = -1;
 
@@ -130,9 +128,9 @@ namespace foggycam
             }
 
             StartPlayback sp = new StartPlayback();
-            sp.session_id = random.Next(0, 100);
-            sp.profile = (int)primaryProfile;
-            sp.other_profiles = otherProfiles.ToArray<int>();
+            sp.SessionId = random.Next(0, 100);
+            sp.Profile = (int)primaryProfile;
+            sp.OtherProfiles = otherProfiles.ToArray<int>();
 
             using (MemoryStream spStream = new MemoryStream())
             {
@@ -169,17 +167,23 @@ namespace foggycam
             }
             audioStream.Clear();
 
-            DumpToFile(videoBuffer, audioBuffer, DateTime.Now.ToString("yyyy-MM-dd--HH-mm-ss") + ".mp4");
+            var fileName = DateTime.Now.ToString("yyyy-MM-dd--HH-mm-ss") + ".mp4";
+            DumpToFile(videoBuffer, audioBuffer, fileName);
+
         }
 
-        static void DumpToFile(List<byte[]> videoBuffer, List<byte[]> audioBuffer, string filename)
+        static void DumpToFile(List<byte[]> videoBuffer, List<byte[]> audioBuffer, string fileName)
         {
+
+            // Compile the initial video file (without any audio).
+
             var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
             if (!Directory.Exists(string.Concat(CONFIG.video_output_folder, dateFolder)))
             {
                 Directory.CreateDirectory(string.Concat(CONFIG.video_output_folder, dateFolder));
             }
-            var outputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/", filename);
+            var outputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/", fileName);
+
             var startInfo = new ProcessStartInfo(CONFIG.ffmpeg_path.ToString());
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
@@ -196,6 +200,7 @@ namespace foggycam
             argumentBuilder.Add("-an");
             argumentBuilder.Add(outputPath);
 
+
             startInfo.Arguments = string.Join(" ", argumentBuilder.ToArray());
 
             var _ffMpegProcess = new Process();
@@ -203,34 +208,88 @@ namespace foggycam
             _ffMpegProcess.OutputDataReceived += (s, e) => { Console.WriteLine(e.Data); };
             _ffMpegProcess.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };
 
+
             _ffMpegProcess.StartInfo = startInfo;
 
-            Console.WriteLine($"[log] Starting write to {filename}...");
+            Console.WriteLine($"[log] Starting write to {fileName}...");
 
             _ffMpegProcess.Start();
             _ffMpegProcess.BeginOutputReadLine();
             _ffMpegProcess.BeginErrorReadLine();
 
-            for (int i = 0; i < videoBuffer.Count; i++)
+            byte[] fullBuffer = videoBuffer.SelectMany(a => a).ToArray();
+            Console.WriteLine("Full buffer: " + fullBuffer.Length);
+
+            using (var memoryStream = new MemoryStream(fullBuffer))
             {
-                _ffMpegProcess.StandardInput.BaseStream.Write(videoBuffer[i], 0, videoBuffer[i].Length);
+                memoryStream.CopyTo(_ffMpegProcess.StandardInput.BaseStream);
             }
 
             _ffMpegProcess.StandardInput.BaseStream.Close();
 
-            Console.WriteLine($"[log] Writing of {filename} completed.");
-            ScanForMotion(dateFolder, filename);
+
+            Process[] pname = Process.GetProcessesByName("ffmpeg");
+            while (pname.Length > 0)
+            {
+                pname = Process.GetProcessesByName("ffmpeg");
+            }
+
+            argumentBuilder = new List<string>();
+            argumentBuilder.Add($"-i {fileName}");
+            argumentBuilder.Add("-i pipe:");
+            argumentBuilder.Add($"foggycam_{fileName}");
+
+            startInfo.Arguments = string.Join(" ", argumentBuilder.ToArray());
+
+            var _ffMpegAudioProcess = new Process();
+            _ffMpegAudioProcess.EnableRaisingEvents = true;
+            _ffMpegAudioProcess.OutputDataReceived += (s, e) => { Debug.WriteLine(e.Data); };
+            _ffMpegAudioProcess.ErrorDataReceived += (s, e) => { Debug.WriteLine(e.Data); };
+
+            _ffMpegAudioProcess.StartInfo = startInfo;
+
+            Console.WriteLine($"[log] Starting mux audio to {fileName}...");
+
+            try
+            {
+                _ffMpegAudioProcess.Start();
+                _ffMpegAudioProcess.BeginOutputReadLine();
+                _ffMpegAudioProcess.BeginErrorReadLine();
+
+                Console.WriteLine("[log] Got access to the process input stream.");
+                foreach (var byteSet in audioBuffer)
+                {
+                    _ffMpegAudioProcess.StandardInput.BaseStream.Write(byteSet, 0, byteSet.Length);
+                }
+                Console.WriteLine("[log] Done writing input stream.");
+
+                _ffMpegAudioProcess.StandardInput.BaseStream.Close();
+
+                pname = Process.GetProcessesByName("ffmpeg");
+                while (pname.Length > 0)
+                {
+                    pname = Process.GetProcessesByName("ffmpeg");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[error] An error occurred writing the audio file.");
+                Console.WriteLine($"[error] {ex.Message}");
+            }
+
+
+            ScanForMotion(dateFolder, fileName);
         }
 
-        static void ScanForMotion(string dateFolder, string filename)
+        static void ScanForMotion(string dateFolder, string fileName)
         {
             if (!Directory.Exists(string.Concat(CONFIG.video_output_folder, dateFolder)))
             {
                 Directory.CreateDirectory(string.Concat(CONFIG.video_motion_folder, dateFolder));
             }
 
-            var inputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/", filename);
-            var outputPath = string.Concat(CONFIG.video_motion_folder, dateFolder, "/", filename);
+            var inputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/", fileName);
+            var outputPath = string.Concat(CONFIG.video_motion_folder, dateFolder, "/", fileName);
             var startInfo = new ProcessStartInfo(CONFIG.dvrscan_path.ToString());
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
@@ -253,29 +312,30 @@ namespace foggycam
 
             _dvrscanProcess.StartInfo = startInfo;
 
-            Console.WriteLine($"[log] Starting motion check to {filename}...");
+            Console.WriteLine($"[log] Starting motion check to {fileName}...");
 
             _dvrscanProcess.Start();
-            Console.WriteLine($"[log] {filename} motion completed.");
+            Console.WriteLine($"[log] {fileName} motion completed.");
+
         }
 
         static void SetupConnection(string host, string cameraUuid, string deviceId, string token)
         {
             var tc = new TokenContainer();
-            tc.olive_token = token;
+            tc.OliveToken = token;
 
             using (var mStream = new MemoryStream())
             {
                 Serializer.Serialize(mStream, tc);
 
                 var helloRequestBuffer = new HelloContainer();
-                helloRequestBuffer.protocol_version = 3;
-                helloRequestBuffer.uuid = cameraUuid;
-                helloRequestBuffer.device_id = deviceId;
-                helloRequestBuffer.require_connected_camera = false;
-                helloRequestBuffer.user_agent = USER_AGENT;
-                helloRequestBuffer.client_type = 3;
-                helloRequestBuffer.authorize_request = mStream.GetBuffer();
+                helloRequestBuffer.ProtocolVersion = 3;
+                helloRequestBuffer.Uuid = cameraUuid;
+                helloRequestBuffer.DeviceId = deviceId;
+                helloRequestBuffer.RequireConnectedCamera = false;
+                helloRequestBuffer.UserAgent = USER_AGENT;
+                helloRequestBuffer.ClientType = 3;
+                helloRequestBuffer.AuthorizeRequest = mStream.GetBuffer();
 
                 using (var finalMStream = new MemoryStream())
                 {
@@ -404,7 +464,6 @@ namespace foggycam
             switch (type)
             {
                 case PacketType.OK:
-                    authorized = true;
                     StartPlayback(CAMERA.items[0]);
                     break;
                 case PacketType.PING:
@@ -417,11 +476,9 @@ namespace foggycam
                     HandlePlayback(rawPayload);
                     break;
                 case PacketType.REDIRECT:
-                    authorized = false;
                     HandleRedirect(rawPayload);
                     break;
                 case PacketType.ERROR:
-                    authorized = false;
                     ws.Close();
                     HandleError(rawPayload);
                     break;
@@ -439,7 +496,7 @@ namespace foggycam
             using (MemoryStream stream = new MemoryStream(rawPayload))
             {
                 var packet = Serializer.Deserialize<Redirect>(stream);
-                SetupConnection(packet.new_host, CAMERA_UUID, HOMEBOX_CAMERA_ID, TOKEN);
+                SetupConnection(packet.NewHost, CAMERA_UUID, HOMEBOX_CAMERA_ID, TOKEN);
             }
         }
 
@@ -449,7 +506,7 @@ namespace foggycam
             {
                 var packet = Serializer.Deserialize<PlaybackError>(stream);
 
-                Console.WriteLine($"[error] The capture errored out for the following reason: {packet.reason}");
+                Console.WriteLine($"[error] The capture errored out for the following reason: {packet.Reason}");
             }
         }
 
@@ -459,31 +516,33 @@ namespace foggycam
             {
                 var packet = Serializer.Deserialize<PlaybackPacket>(stream);
 
-                if (packet.channel_id == videoChannelId)
+                if (packet.ChannelId == videoChannelId)
                 {
                     //Console.WriteLine("[log] Video packet received.");
                     byte[] h264Header = { 0x00, 0x00, 0x00, 0x01 };
-                    var writingBlock = new byte[h264Header.Length + packet.payload.Length];
+                    var writingBlock = new byte[h264Header.Length + packet.Payload.Length];
                     h264Header.CopyTo(writingBlock, 0);
-                    packet.payload.CopyTo(writingBlock, h264Header.Length);
+                    packet.Payload.CopyTo(writingBlock, h264Header.Length);
 
                     videoStream.Add(writingBlock);
                 }
-                else if (packet.channel_id == audioChannelId)
+                else if (packet.ChannelId == audioChannelId)
                 {
-                    //Console.WriteLine("[log] Audio packet received.");
+
+                    Console.WriteLine("[log] Audio packet received.");
                     audioStream.Add(packet.payload);
+
                 }
                 else
                 {
-                    Console.WriteLine("[log] Unknown channel: " + packet.channel_id);
+                    Console.WriteLine("[log] Unknown channel: " + packet.Payload);
                 }
             }
 
             //Console.WriteLine($"[log] Video buffer length: {videoStream.Count}");
             //Console.WriteLine($"[log] Socket state: {ws.State}");
             // Once we reach a certain threshold, let's make sure that we flush the buffer.
-            if (videoStream.Count > 1000)
+            if (videoStream.Count > 500)
             {
                 ProcessBuffers(videoStream, audioStream);
             }
@@ -495,28 +554,26 @@ namespace foggycam
             {
                 var packet = Serializer.Deserialize<PlaybackBegin>(stream);
 
-                foreach (var registeredStream in packet.channels)
+                foreach (var registeredStream in packet.Channels)
                 {
-                    if ((CodecType)registeredStream.codec_type == CodecType.H264)
+                    if ((CodecType)registeredStream.CodecType == CodecType.H264)
                     {
-                        videoChannelId = registeredStream.channel_id;
+                        videoChannelId = registeredStream.ChannelId;
                     }
-                    else if ((CodecType)registeredStream.codec_type == CodecType.AAC)
+                    else if ((CodecType)registeredStream.CodecType == CodecType.AAC)
                     {
-                        audioChannelId = registeredStream.channel_id;
+                        audioChannelId = registeredStream.ChannelId;
                     }
                 }
             }
         }
 
-        private async static void Ws_Error(object sender, SuperSocket.ClientEngine.ErrorEventArgs e)
+        private static void Ws_Error(object sender, SuperSocket.ClientEngine.ErrorEventArgs e)
         {
             Console.WriteLine("[log] Socket errored out.");
             Console.WriteLine(e.Exception.Message);
             Console.WriteLine(e.Exception.InnerException);
             Console.WriteLine(e.Exception.GetType());
-
-            authorized = false; 
         }
 
 

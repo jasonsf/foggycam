@@ -6,20 +6,20 @@ namespace foggycam.Models
     public class Stream
     {
         [ProtoMember(1)]
-        public int channel_id { get; set; }
+        public int ChannelId { get; set; }
         [ProtoMember(2)]
-        public int codec_type { get; set; }
+        public int CodecType { get; set; }
         [ProtoMember(3)]
-        public int sample_rate { get; set; }
+        public int SampleRate { get; set; }
         [ProtoMember(4)]
-        public byte[] private_data { get; set; }
+        public byte[] PrivateData { get; set; }
         [ProtoMember(5)]
-        public double start_time { get; set; }
+        public double StartTime { get; set; }
         [ProtoMember(6)]
-        public int udp_ssrc { get; set; }
+        public int UdpSsrc { get; set; }
         [ProtoMember(7)]
-        public int rtp_start_time { get; set; }
+        public int RtpStartTime { get; set; }
         [ProtoMember(8)]
-        public int profile { get; set; }
+        public int Profile { get; set; }
     }
 }
