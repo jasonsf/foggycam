@@ -6,12 +6,12 @@ namespace foggycam.Models
     public class TokenContainer
     {
         [ProtoMember(1)]
-        public string? session_token { get; set; }
+        public string? SessionToken { get; set; }
         [ProtoMember(2)]
-        public string? wwn_access_token { get; set; }
+        public string? WwnAccessToken { get; set; }
         [ProtoMember(3)]
-        public string? service_access_key { get; set; }
+        public string? ServiceAccessKey { get; set; }
         [ProtoMember(4)]
-        public string? olive_token { get; set; }
+        public string? OliveToken { get; set; }
     }
 }

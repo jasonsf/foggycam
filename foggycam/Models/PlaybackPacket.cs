@@ -6,18 +6,18 @@ namespace foggycam.Models
     public class PlaybackPacket
     {
         [ProtoMember(1)]
-        public int session_id { get; set; }
+        public int SessionId { get; set; }
         [ProtoMember(2)]
-        public int channel_id { get; set; }
+        public int ChannelId { get; set; }
         [ProtoMember(3)]
-        public long timestamp_delta { get; set; }
+        public long TimestampDelta { get; set; }
         [ProtoMember(4)]
-        public byte[] payload { get; set; }
+        public byte[] Payload { get; set; }
         [ProtoMember(5)]
-        public int latency_rtp_sequence { get; set; }
+        public int LatecyRtpSequence { get; set; }
         [ProtoMember(6)]
-        public int latency_rtp_ssrc { get; set; }
+        public int LatencyRtpSsrc { get; set; }
         [ProtoMember(7)]
-        public int[] directors_cut_regions { get; set; }
+        public int[] DirectorsCutRegions { get; set; }
     }
 }

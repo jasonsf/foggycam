@@ -6,18 +6,18 @@ namespace foggycam.Models
     public class StartPlayback
     {
         [ProtoMember(1)]
-        public int? session_id { get; set; }
+        public int? SessionId { get; set; }
         [ProtoMember(2)]
-        public int? profile { get; set; }
+        public int? Profile { get; set; }
         [ProtoMember(3)]
-        public double? start_time { get; set; }
+        public double? StartTime { get; set; }
         [ProtoMember(4)]
-        public byte[]? external_ip { get; set; }
+        public byte[]? ExternalIp { get; set; }
         [ProtoMember(5)]
-        public int? intexternal_port { get; set; }
+        public int? ExternalPort { get; set; }
         [ProtoMember(6)]
-        public int[]? other_profiles { get; set; }
+        public int[]? OtherProfiles { get; set; }
         [ProtoMember(7)]
-        public int? profile_not_found_action { get; set; }
+        public int? ProfileNotFoundAction { get; set; }
     }
 }

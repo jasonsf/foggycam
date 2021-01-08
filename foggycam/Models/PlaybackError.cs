@@ -14,8 +14,8 @@ namespace foggycam.Models
     public class PlaybackError
     {
         [ProtoMember(1)]
-        public int session_id { get; set; }
+        public int SessionId { get; set; }
         [ProtoMember(2)]
-        public string reason { get; set; }
+        public string Reason { get; set; }
     }
 }
