@@ -182,7 +182,7 @@ namespace foggycam
             {
                 Directory.CreateDirectory(string.Concat(CONFIG.video_output_folder, dateFolder));
             }
-            var outputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/", fileName);
+            var tmpOutputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/tmp_", fileName);
 
             var startInfo = new ProcessStartInfo(CONFIG.ffmpeg_path.ToString());
             startInfo.RedirectStandardInput = true;
@@ -191,14 +191,14 @@ namespace foggycam
             startInfo.UseShellExecute = false;
 
             var argumentBuilder = new List<string>();
-            argumentBuilder.Add("-loglevel info");
+            argumentBuilder.Add("-loglevel panic");
             argumentBuilder.Add("-f h264");
             argumentBuilder.Add("-i pipe:");
             argumentBuilder.Add("-c:v libx264");
             argumentBuilder.Add("-bf 0");
             argumentBuilder.Add("-pix_fmt yuv420p");
             argumentBuilder.Add("-an");
-            argumentBuilder.Add(outputPath);
+            argumentBuilder.Add(tmpOutputPath);
 
 
             startInfo.Arguments = string.Join(" ", argumentBuilder.ToArray());
@@ -211,7 +211,7 @@ namespace foggycam
 
             _ffMpegProcess.StartInfo = startInfo;
 
-            Console.WriteLine($"[log] Starting write to {fileName}...");
+            Console.WriteLine($"[log] Starting write to {tmpOutputPath}...");
 
             _ffMpegProcess.Start();
             _ffMpegProcess.BeginOutputReadLine();
@@ -233,22 +233,24 @@ namespace foggycam
             {
                 pname = Process.GetProcessesByName("ffmpeg");
             }
-
+            var audioOutputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/", fileName);
             argumentBuilder = new List<string>();
-            argumentBuilder.Add($"-i {fileName}");
+            argumentBuilder.Add("-loglevel panic");
+            argumentBuilder.Add($"-i {tmpOutputPath}");
             argumentBuilder.Add("-i pipe:");
-            argumentBuilder.Add($"foggycam_{fileName}");
+            argumentBuilder.Add("-strict -2");
+            argumentBuilder.Add($"{audioOutputPath}");
 
             startInfo.Arguments = string.Join(" ", argumentBuilder.ToArray());
 
             var _ffMpegAudioProcess = new Process();
             _ffMpegAudioProcess.EnableRaisingEvents = true;
-            _ffMpegAudioProcess.OutputDataReceived += (s, e) => { Debug.WriteLine(e.Data); };
-            _ffMpegAudioProcess.ErrorDataReceived += (s, e) => { Debug.WriteLine(e.Data); };
+            _ffMpegAudioProcess.OutputDataReceived += (s, e) => { Console.WriteLine(e.Data); };
+            _ffMpegAudioProcess.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };
 
             _ffMpegAudioProcess.StartInfo = startInfo;
 
-            Console.WriteLine($"[log] Starting mux audio to {fileName}...");
+            Console.WriteLine($"[log] Starting mux audio to {audioOutputPath}...");
 
             try
             {
@@ -270,6 +272,10 @@ namespace foggycam
                 {
                     pname = Process.GetProcessesByName("ffmpeg");
                 }
+                //              Delete original temp file without audio
+                Console.WriteLine($"Deleting temp file {tmpOutputPath}");
+                File.Delete(tmpOutputPath);
+
             }
             catch (Exception ex)
             {
@@ -289,7 +295,8 @@ namespace foggycam
             }
 
             var inputPath = string.Concat(CONFIG.video_output_folder, dateFolder, "/", fileName);
-            var outputPath = string.Concat(CONFIG.video_motion_folder, dateFolder, "/", fileName);
+            var outFile = fileName.Replace(".mp4", ".avi");
+            var outputPath = string.Concat(CONFIG.video_motion_folder, dateFolder, "/", outFile);
             var startInfo = new ProcessStartInfo(CONFIG.dvrscan_path.ToString());
             startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
@@ -305,18 +312,35 @@ namespace foggycam
 
             startInfo.Arguments = string.Join(" ", argumentBuilder.ToArray());
 
+
             var _dvrscanProcess = new Process();
+            _dvrscanProcess.Exited += (sender, e) => { 
+                long motionFileSize = new System.IO.FileInfo(outputPath).Length;
+                Console.WriteLine($"[dvr-scan] {fileName} motion completed {motionFileSize} bytes.");
+                if (motionFileSize == 5686)
+                {
+                    File.Delete(outputPath);
+                }
+            };
             _dvrscanProcess.EnableRaisingEvents = true;
             _dvrscanProcess.OutputDataReceived += (s, e) => { Console.WriteLine(e.Data); };
             _dvrscanProcess.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };
 
             _dvrscanProcess.StartInfo = startInfo;
 
-            Console.WriteLine($"[log] Starting motion check to {fileName}...");
-
-            _dvrscanProcess.Start();
-            Console.WriteLine($"[log] {fileName} motion completed.");
-
+            Console.WriteLine($"[dvr-scan] Starting motion check to {fileName}...");
+            Console.WriteLine($"[dvr-scan] Motion arguments: {CONFIG.dvrscan_path.ToString()} {startInfo.Arguments}");
+            try
+            {
+                _dvrscanProcess.Start();
+                _dvrscanProcess.BeginOutputReadLine();
+                _dvrscanProcess.BeginErrorReadLine();
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine("[error] An error occurred scanning for motion.");
+                Console.WriteLine($"[error] {ex.Message}");
+            }
         }
 
         static void SetupConnection(string host, string cameraUuid, string deviceId, string token)
@@ -529,8 +553,8 @@ namespace foggycam
                 else if (packet.ChannelId == audioChannelId)
                 {
 
-                    Console.WriteLine("[log] Audio packet received.");
-                    audioStream.Add(packet.payload);
+                    //Console.WriteLine("[log] Audio packet received.");
+                    audioStream.Add(packet.Payload);
 
                 }
                 else
@@ -574,6 +598,8 @@ namespace foggycam
             Console.WriteLine(e.Exception.Message);
             Console.WriteLine(e.Exception.InnerException);
             Console.WriteLine(e.Exception.GetType());
+            ws.Close();
+            SetupConnection(NEXUS_HOST + ":80/nexustalk", CAMERA_UUID, HOMEBOX_CAMERA_ID, TOKEN);
         }
 
 
@@ -613,7 +639,7 @@ namespace foggycam
             }
             catch (Exception ex)
             {
-                throw new ArgumentException("[error] Could not parse the referrer domain out of the token.");
+                throw new ArgumentException("[error] Could not parse the referrer domain out of the token.", ex);
             }
 
             try
