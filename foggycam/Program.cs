@@ -99,7 +99,7 @@ namespace foggycam
                 await Task.Delay(15000);
                 var pingBuffer = PreformatData(PacketType.PING, new byte[0]);
                 ws.Send(pingBuffer, 0, pingBuffer.Length);
-                Console.WriteLine("[log] Sent ping.");
+                //Console.WriteLine("[log] Sent ping.");
             }
         }
 
@@ -144,20 +144,24 @@ namespace foggycam
         {
             List<byte[]> videoBuffer = new List<byte[]>();
             List<byte[]> audioBuffer = new List<byte[]>();
-
+            Console.WriteLine($"Starting video buffer {videoStream.Count}");
             for (int i = 0; i < videoStream.Count; i++)
             {
                 videoBuffer.Add(videoStream[i]);
+                Console.Write(".");
             }
             videoStream.Clear();
 
             // Ideally, this needs to match the batch of video frames, so we're snapping to the video
             // buffer length as the baseline. I am not yet certain this is a good assumption, but time will tell.
+            Console.WriteLine("");
+            Console.WriteLine("Starting audio buffer");
             for (int i = 0; i < videoBuffer.Count; i++)
             {
                 try
                 {
                     audioBuffer.Add(audioStream[i]);
+                    Console.Write(".");
                 }
                 catch
                 {
@@ -166,7 +170,8 @@ namespace foggycam
                 }
             }
             audioStream.Clear();
-
+            Console.WriteLine("");
+            Console.WriteLine("Stream Collected. Starting dump to file.");
             var fileName = DateTime.Now.ToString("yyyy-MM-dd--HH-mm-ss") + ".mp4";
             DumpToFile(videoBuffer, audioBuffer, fileName);
 
@@ -204,6 +209,10 @@ namespace foggycam
             startInfo.Arguments = string.Join(" ", argumentBuilder.ToArray());
 
             var _ffMpegProcess = new Process();
+            _ffMpegProcess.Exited += (sender, e) =>
+            {
+                Console.WriteLine("ffmpeg process exit");
+            };
             _ffMpegProcess.EnableRaisingEvents = true;
             _ffMpegProcess.OutputDataReceived += (s, e) => { Console.WriteLine(e.Data); };
             _ffMpegProcess.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };
@@ -244,12 +253,31 @@ namespace foggycam
             startInfo.Arguments = string.Join(" ", argumentBuilder.ToArray());
 
             var _ffMpegAudioProcess = new Process();
+            _ffMpegAudioProcess.Exited += (sender, e) => {
+                Console.WriteLine("ffmpeg audio process exit");
+                if (File.Exists(tmpOutputPath))
+                {
+                    //Delete original temp file without audio
+                    Console.WriteLine($"Deleting temp file {tmpOutputPath}");
+                    try
+                    {
+                        File.Delete(tmpOutputPath);
+                        if (CONFIG.scan_for_motion == "true")
+                        {
+                            ScanForMotion(dateFolder, fileName);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] Deleting temp file {tmpOutputPath}: {ex}");
+                    }
+                }
+            };
             _ffMpegAudioProcess.EnableRaisingEvents = true;
             _ffMpegAudioProcess.OutputDataReceived += (s, e) => { Console.WriteLine(e.Data); };
             _ffMpegAudioProcess.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };
 
             _ffMpegAudioProcess.StartInfo = startInfo;
-
             Console.WriteLine($"[log] Starting mux audio to {audioOutputPath}...");
 
             try
@@ -262,7 +290,9 @@ namespace foggycam
                 foreach (var byteSet in audioBuffer)
                 {
                     _ffMpegAudioProcess.StandardInput.BaseStream.Write(byteSet, 0, byteSet.Length);
+                    Console.Write(".");
                 }
+                Console.WriteLine("");
                 Console.WriteLine("[log] Done writing input stream.");
 
                 _ffMpegAudioProcess.StandardInput.BaseStream.Close();
@@ -272,9 +302,7 @@ namespace foggycam
                 {
                     pname = Process.GetProcessesByName("ffmpeg");
                 }
-                //              Delete original temp file without audio
-                Console.WriteLine($"Deleting temp file {tmpOutputPath}");
-                File.Delete(tmpOutputPath);
+
 
             }
             catch (Exception ex)
@@ -283,8 +311,8 @@ namespace foggycam
                 Console.WriteLine($"[error] {ex.Message}");
             }
 
+            
 
-            ScanForMotion(dateFolder, fileName);
         }
 
         static void ScanForMotion(string dateFolder, string fileName)
@@ -319,12 +347,11 @@ namespace foggycam
                 {
                     FileInfo motionFile = new FileInfo(outputPath);
                     Console.WriteLine($"[dvr-scan] {outFile} motion completed {motionFile.Length} bytes.");
-                    Console.Write($"Empty file? ({motionFile.Length == 5686})");
                     //Validate Length     
-                    if (motionFile.Length == 5686)
+                    if (motionFile.Length <= 5686)
                     {
                         //Throw error if file size is larger than your default/set size.    
-                        Console.WriteLine($"Deleting {outputPath}");
+                        Console.WriteLine($"Deleting {outputPath} because it is empty");
                         File.Delete(outputPath);
                     }
                 }
@@ -334,7 +361,6 @@ namespace foggycam
             _dvrscanProcess.ErrorDataReceived += (s, e) => { Console.WriteLine(e.Data); };
 
             _dvrscanProcess.StartInfo = startInfo;
-
             Console.WriteLine($"[dvr-scan] Starting motion check to {fileName}...");
             Console.WriteLine($"[dvr-scan] Motion arguments: {CONFIG.dvrscan_path.ToString()} {startInfo.Arguments}");
             try
@@ -536,7 +562,6 @@ namespace foggycam
             using (MemoryStream stream = new MemoryStream(rawPayload))
             {
                 var packet = Serializer.Deserialize<PlaybackError>(stream);
-
                 Console.WriteLine($"[error] The capture errored out for the following reason: {packet.Reason}");
             }
         }
@@ -566,7 +591,8 @@ namespace foggycam
                 }
                 else
                 {
-                    Console.WriteLine("[log] Unknown channel: " + packet.Payload);
+                    Console.WriteLine("");
+                    //Console.WriteLine("[log] Unknown channel: " + packet.Payload);
                 }
             }
 
@@ -703,6 +729,7 @@ namespace foggycam
                     }
                     else
                     {
+                        Console.WriteLine("");
                         Console.WriteLine(response.StatusCode);
                     }
                 }
