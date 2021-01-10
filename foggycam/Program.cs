@@ -289,7 +289,7 @@ namespace foggycam
 
         static void ScanForMotion(string dateFolder, string fileName)
         {
-            if (!Directory.Exists(string.Concat(CONFIG.video_output_folder, dateFolder)))
+            if (!Directory.Exists(string.Concat(CONFIG.video_motion_folder, dateFolder)))
             {
                 Directory.CreateDirectory(string.Concat(CONFIG.video_motion_folder, dateFolder));
             }
@@ -314,12 +314,19 @@ namespace foggycam
 
 
             var _dvrscanProcess = new Process();
-            _dvrscanProcess.Exited += (sender, e) => { 
-                long motionFileSize = new System.IO.FileInfo(outputPath).Length;
-                Console.WriteLine($"[dvr-scan] {fileName} motion completed {motionFileSize} bytes.");
-                if (motionFileSize == 5686)
+            _dvrscanProcess.Exited += (sender, e) => {
+                if (File.Exists(outputPath))
                 {
-                    File.Delete(outputPath);
+                    FileInfo motionFile = new FileInfo(outputPath);
+                    Console.WriteLine($"[dvr-scan] {outFile} motion completed {motionFile.Length} bytes.");
+                    Console.Write($"Empty file? ({motionFile.Length == 5686})");
+                    //Validate Length     
+                    if (motionFile.Length == 5686)
+                    {
+                        //Throw error if file size is larger than your default/set size.    
+                        Console.WriteLine($"Deleting {outputPath}");
+                        File.Delete(outputPath);
+                    }
                 }
             };
             _dvrscanProcess.EnableRaisingEvents = true;
@@ -594,12 +601,17 @@ namespace foggycam
 
         private static void Ws_Error(object sender, SuperSocket.ClientEngine.ErrorEventArgs e)
         {
+            Process[] pname = Process.GetProcessesByName("foggycam");
             Console.WriteLine("[log] Socket errored out.");
             Console.WriteLine(e.Exception.Message);
             Console.WriteLine(e.Exception.InnerException);
             Console.WriteLine(e.Exception.GetType());
-            ws.Close();
-            SetupConnection(NEXUS_HOST + ":80/nexustalk", CAMERA_UUID, HOMEBOX_CAMERA_ID, TOKEN);
+            //ProcessStartInfo Info = new ProcessStartInfo("/bin/bash");
+            //Info.Arguments = " \"/foggycam/start.sh\"";
+            //Process.Start(Info);
+            
+            //pname[0].Kill();
+            
         }
 
 
